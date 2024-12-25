@@ -1,12 +1,15 @@
 import os
 import logging
 import beets
+import shutil
+import itertools
 from unittest import mock
 from shlex import quote
 from beets.test import _common
 from beets.test.helper import PluginTestCase
 from beetsplug import mpdupdate
 from beetsplug.mpdupdate import BufferedSocket
+from beets.util import bytestring_path, syspath
 
 log = logging.getLogger("beets")
 
@@ -17,51 +20,19 @@ class MpdUpdateTestBase(PluginTestCase):
     def setUp(self):
         super().setUp()
 
-        self.music_dir = os.path.expanduser(os.path.join("~", "Music"))
+        self.config["directory"] = self.temp_dir.decode('utf-8')
 
-        i1 = _common.item()
-        i1.path = beets.util.normpath(
-            os.path.join(
-                self.music_dir,
-                "a",
-                "b",
-                "c.mp3",
-            )
+        self.ipath = os.path.join(self.temp_dir, b"testfile.mp3")
+        shutil.copy(
+            syspath(os.path.join(_common.RSRC, b"full.mp3")),
+            syspath(self.ipath),
         )
-        i1.title = "some item"
-        i1.album = "some album"
-        self.lib.add(i1)
-        self.lib.add_album([i1])
+        self.i = beets.library.Item.from_path(self.ipath)
 
-        i2 = _common.item()
-        i2.path = beets.util.normpath(
-            os.path.join(
-                self.music_dir,
-                "d",
-                "e",
-                "f.mp3",
-            )
-        )
-        i2.title = "another item"
-        i2.album = "another album"
-        self.lib.add(i2)
-        self.lib.add_album([i2])
-
-        i3 = _common.item()
-        i3.path = beets.util.normpath(
-            os.path.join(
-                self.music_dir,
-                "x",
-                "y",
-                "z.mp3",
-            )
-        )
-        i3.title = "yet another item"
-        i3.album = "yet another album"
-        self.lib.add(i3)
-        self.lib.add_album([i3])
-
-        self.config["directory"] = self.music_dir
+    def tearDown(self):
+        super().tearDown()
+        if os.path.exists(self.ipath):
+            os.remove(self.ipath)
 
 class GranularUpdateTest(MpdUpdateTestBase):
     def setUp(self):
@@ -72,26 +43,20 @@ class GranularUpdateTest(MpdUpdateTestBase):
         self.load_plugins()
 
 
-    def test_album_added(self):
-        results = self.lib.items(
-            "path:{}".format(
-                quote(os.path.join(self.music_dir, "d", "e", "f.mp3"))
-            )
-        )
-        item = results[0]
-        log.info(f'{item}')
+    def test_item_added(self):
+        log.info('{0!r}', self.i)
         with mock.patch('beetsplug.mpdupdate.BufferedSocket', autospec=True) as mocket:
             # item.store()
             instance = mocket.return_value
-            instance.readline.side_effect = [
+            instance.readline.side_effect = itertools.cycle([
                 b"OK MPD",
                 b"updating_db",
-            ]
-            self.lib.add(item)
-            self.lib.add_album([item])
+            ])
+            self.lib.add(self.i)
+            beets.plugins.send("cli_exit", lib=self.lib)
             log.info(str(instance.send.mock_calls))
-            relative_path = os.path.join(self.music_dir, "d", "e", "f.mp3")
-            assert mock.call(f"update {relative_path}\n".encode()) in instance.send.mock_calls
+            assert mock.call(f"update testfile.mp3\n".encode()) in instance.send.mock_calls
+            assert False
 
 
 class NonGranularUpdateTest(MpdUpdateTestBase):
@@ -102,20 +67,14 @@ class NonGranularUpdateTest(MpdUpdateTestBase):
         self.load_plugins()
 
     def test_album_added(self):
-        results = self.lib.items(
-            "path:{}".format(
-                quote(os.path.join(self.music_dir, "d", "e", "f.mp3"))
-            )
-        )
-        item = results[0]
-        log.info(f'{item}')
+        log.info('{0!r}', self.i)
         with mock.patch('beetsplug.mpdupdate.BufferedSocket', autospec=True) as mocket:
             instance = mocket.return_value
-            instance.readline.side_effect = [
+            instance.readline.side_effect = itertools.cycle([
                 b"OK MPD",
                 b"updating_db",
-            ]
-            beets.plugins.send("database_change", lib=self.lib, model=item)
+            ])
+            self.lib.add(self.i)
             beets.plugins.send("cli_exit", lib=self.lib)
             log.info(str(instance.send.mock_calls))
             assert mock.call(b"update\n") in instance.send.mock_calls

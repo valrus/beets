@@ -23,6 +23,7 @@ Put something like the following in your config.yaml to configure:
 
 import os
 import socket
+import traceback
 from functools import partial
 
 from beets import config
@@ -84,13 +85,16 @@ class MPDUpdatePlugin(BeetsPlugin):
                 config["mpd"][key] = self.config[key].get()
 
         self.register_listener("database_change", self.db_change)
-        self.register_listener("album_imported", partial(self.log_event, event_type="album_imported"))
+        # self.register_listener("album_imported", partial(self.log_event, event_type="album_imported"))
+        self.register_listener("after_write", partial(self.log_event, event_type="after_write"))
+        self.register_listener("item_removed", partial(self.log_event, event_type="item_removed"))
 
-    def log_event(self, event_type: str):
-        self._log.info(event_type)
+    def log_event(self, event_type: str, **kwargs):
+        self._log.info("{0!r} - {1!r}", event_type, kwargs)
 
     def db_change(self, lib, model):
         self._log.info(f"db_change for {model}")
+        self._log.info('\n'.join(traceback.format_stack()))
         self.register_listener("cli_exit", partial(self.update, model=model))
 
     def update(self, lib, model=None):
@@ -128,9 +132,9 @@ class MPDUpdatePlugin(BeetsPlugin):
                 return
 
         update_cmd = b"update\n"
-        self._log.info("Updating {0!r}", model)
         if model and config["mpd"]["granularupdate"]:
-            relative_path = model.path.relative_to(config['directory'])
+            relative_path = model.filepath.relative_to(config['directory'].as_str())
+            self._log.info("Updating {0!r}", relative_path)
             update_cmd = f"update {relative_path}\n".encode()
 
         s.send(update_cmd)

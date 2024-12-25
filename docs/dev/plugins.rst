@@ -262,6 +262,7 @@ The events currently available are:
   tags set at the track level, if they have the same ``field``.
   Parameter: ``data``
 
+TODO: point to a different plugin if ``mpdupdate`` becomes more complex?
 The included ``mpdupdate`` plugin provides an example use case for event listeners.
 
 Extend the Autotagger
