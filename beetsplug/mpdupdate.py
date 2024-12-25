@@ -23,6 +23,7 @@ Put something like the following in your config.yaml to configure:
 
 import os
 import socket
+from functools import partial
 
 from beets import config
 from beets.plugins import BeetsPlugin
@@ -71,6 +72,7 @@ class MPDUpdatePlugin(BeetsPlugin):
                 "host": os.environ.get("MPD_HOST", "localhost"),
                 "port": int(os.environ.get("MPD_PORT", 6600)),
                 "password": "",
+                "granularupdate": False,
             }
         )
         config["mpd"]["password"].redact = True
@@ -82,18 +84,24 @@ class MPDUpdatePlugin(BeetsPlugin):
                 config["mpd"][key] = self.config[key].get()
 
         self.register_listener("database_change", self.db_change)
+        self.register_listener("album_imported", partial(self.log_event, event_type="album_imported"))
+
+    def log_event(self, event_type: str):
+        self._log.info(event_type)
 
     def db_change(self, lib, model):
-        self.register_listener("cli_exit", self.update)
+        self._log.info(f"db_change for {model}")
+        self.register_listener("cli_exit", partial(self.update, model=model))
 
-    def update(self, lib):
+    def update(self, lib, model=None):
         self.update_mpd(
             config["mpd"]["host"].as_str(),
             config["mpd"]["port"].get(int),
             config["mpd"]["password"].as_str(),
+            model=model,
         )
 
-    def update_mpd(self, host="localhost", port=6600, password=None):
+    def update_mpd(self, host="localhost", port=6600, password=None, model=None):
         """Sends the "update" command to the MPD server indicated,
         possibly authenticating with a password first.
         """
@@ -119,7 +127,13 @@ class MPDUpdatePlugin(BeetsPlugin):
                 s.close()
                 return
 
-        s.send(b"update\n")
+        update_cmd = b"update\n"
+        self._log.info("Updating {0!r}", model)
+        if model and config["mpd"]["granularupdate"]:
+            relative_path = model.path.relative_to(config['directory'])
+            update_cmd = f"update {relative_path}\n".encode()
+
+        s.send(update_cmd)
         resp = s.readline()
         if b"updating_db" not in resp:
             self._log.warning("Update failed: {0!r}", resp)
