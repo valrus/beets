@@ -574,7 +574,7 @@ class Model(ABC, Generic[D]):
 
     # Database interaction (CRUD methods).
 
-    def store(self, fields: Iterable[str] | None = None, notify: bool = False):
+    def store(self, fields: Iterable[str] | None = None):
         """Save the object's metadata into the library database.
         :param fields: the fields to be stored. If not specified, all fields
         will be.
@@ -669,7 +669,7 @@ class Model(ABC, Generic[D]):
             for key in self:
                 if self[key] is not None:
                     self._dirty.add(key)
-            self.store(notify=False)
+            self.store()
 
     # Formatting and templating.
 
