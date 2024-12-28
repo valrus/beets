@@ -77,11 +77,8 @@ def json_generator(items, root, expand=False):
     :returns:     generator that yields strings
     """
     yield '{"%s":[' % root
-    first = True
-    for item in items:
-        if first:
-            first = False
-        else:
+    for index, item in enumerate(items):
+        if index != 0:
             yield ","
         yield json.dumps(_rep(item, expand=expand))
     yield "]}"
