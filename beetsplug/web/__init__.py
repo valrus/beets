@@ -16,12 +16,12 @@
 
 import base64
 import json
+import mimetypes
 import os
+import random
 from io import BytesIO
 
 import flask
-import mimetypes
-import random
 from flask import g, jsonify, request
 from unidecode import unidecode
 from werkzeug.routing import BaseConverter, PathConverter
