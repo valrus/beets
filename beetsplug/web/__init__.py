@@ -20,6 +20,7 @@ import os
 
 import flask
 from flask import g, jsonify
+import random
 from unidecode import unidecode
 from werkzeug.routing import BaseConverter, PathConverter
 
@@ -374,10 +375,14 @@ def get_album(id):
 
 
 @app.route("/album/")
+@app.route("/album")
 @app.route("/album/query/")
 @resource_list("albums")
 def all_albums():
-    return g.lib.albums()
+    albums = list(g.lib.albums())
+    if 'random' in request.args:
+        random.shuffle(albums)
+    return albums
 
 
 @app.route("/album/query/<query:queries>", methods=["GET", "DELETE"])
